@@ -2,48 +2,85 @@
   "name": "smart-pos",
   "version": "1.0.0",
   "description": "نقطة البيع الذكية - Smart POS System",
+  "author": {
+    "name": "Smart POS",
+    "email": "support@smartpos.app"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"npm run server\" \"vite\" \"wait-on http://localhost:5173 && wait-on http://localhost:3001/api/settings && cross-env electron .\"",
     "build": "vite build",
     "server": "tsx server/index.ts",
+    "server:build": "node node_modules/esbuild/bin/esbuild server/index.ts --bundle --platform=node --target=node18 --outfile=server-build/index.js --format=cjs",
     "start": "concurrently -k \"npm run server\" \"vite\"",
     "electron": "electron .",
-    "build:exe": "vite build && electron-builder --win portable"
+    "build:exe": "npm run server:build && vite build && electron-builder --win nsis",
+    "build:portable": "npm run server:build && vite build && electron-builder --win portable"
   },
   "build": {
     "appId": "com.smartpos.app",
     "productName": "Smart POS",
+    "copyright": "Copyright © 2025 Smart POS",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "electron/main.js",
-      "server/**/*",
+      "server-build/**/*",
       ".env",
-      "!server/**/*.ts",
-      "node_modules/**/*"
+      "!node_modules/**/*"
     ],
     "extraResources": [
       {
-        "from": "node_modules/tsx",
-        "to": "node_modules/tsx"
+        "from": "node_modules/sql.js/dist/sql-wasm.wasm",
+        "to": "sql-wasm.wasm"
       }
     ],
     "win": {
-      "target": "portable",
-      "icon": null
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": null,
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Smart POS",
+      "runAfterFinish": true,
+      "installerIcon": null,
+      "uninstallerIcon": null,
+      "artifactName": "Smart-POS-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": false
     },
     "portable": {
-      "artifactName": "Smart-POS.exe"
+      "artifactName": "Smart-POS-Portable.exe"
     },
-    "asar": false
+    "asar": true,
+    "asarUnpack": [
+      "server-build/**/*"
+    ]
   },
   "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@zxing/browser": "^0.2.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
+    "html2canvas": "^1.4.1",
+    "jsonwebtoken": "^9.0.3",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.344.0",
     "multer": "^1.4.5-lts.1",
     "react": "^18.2.0",

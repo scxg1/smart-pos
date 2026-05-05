@@ -1,13 +1,23 @@
 import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 
 let db: Database;
-const DB_PATH = path.join(__dirname, '..', 'data', 'smart-pos.db');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const DB_PATH = path.join(DATA_DIR, 'smart-pos.db');
 
 export async function initDb(): Promise<Database> {
   const SQL = await initSqlJs({
-    locateFile: (file: string) => path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', file),
+    locateFile: (file: string) => {
+      // في النسخة المُعبّأة (Electron): الـ wasm في resources/ عبر extraResources
+      if (process.resourcesPath) {
+        const p = path.join(process.resourcesPath, file);
+        if (fs.existsSync(p)) return p;
+      }
+      // في وضع التطوير: node_modules
+      return path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', file);
+    },
   });
 
   const dataDir = path.dirname(DB_PATH);
@@ -33,8 +43,10 @@ export async function initDb(): Promise<Database> {
       cost_price REAL DEFAULT 0,
       selling_price REAL DEFAULT 0,
       stock INTEGER DEFAULT 0,
+      max_stock INTEGER DEFAULT 100,
       unit TEXT DEFAULT 'قطعة',
       image_path TEXT DEFAULT '',
+      profit_margin REAL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )
   `);
@@ -59,6 +71,7 @@ export async function initDb(): Promise<Database> {
       tax REAL DEFAULT 0,
       payment_method TEXT DEFAULT 'نقدي',
       note TEXT DEFAULT '',
+      receipt_number TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )
   `);
@@ -103,6 +116,29 @@ export async function initDb(): Promise<Database> {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'كاشير',
+      display_name TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      description TEXT NOT NULL,
+      amount REAL NOT NULL,
+      category TEXT DEFAULT 'عام',
+      expense_date TEXT DEFAULT (date('now', 'localtime')),
+      note TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
+
   const defaultSettings: Record<string, string> = {
     store_name: 'نقطة البيع الذكية',
     store_address: '',
@@ -112,6 +148,7 @@ export async function initDb(): Promise<Database> {
     receipt_footer: 'شكراً لزيارتكم',
     tax_enabled: 'true',
     tax_rate: '15',
+    link_expenses_to_profit: 'false',
   };
 
   for (const [key, value] of Object.entries(defaultSettings)) {
@@ -119,6 +156,48 @@ export async function initDb(): Promise<Database> {
     if (existing.length === 0) {
       db.run(`INSERT INTO settings (key, value) VALUES (?, ?)`, [key, value]);
     }
+  }
+
+  // ═══ Performance indexes ═══
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sales_created_at    ON sales(created_at)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sales_customer_id   ON sales(customer_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sales_receipt       ON sales(receipt_number)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id  ON sale_items(sale_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sale_items_product  ON sale_items(product_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_products_barcode    ON products(barcode)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_chat_msgs_session   ON chat_messages(session_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_date       ON expenses(expense_date)`);
+
+  // ═══ Migrations: Add missing columns to existing tables ═══
+  const migrations = [
+    { table: 'sales', column: 'receipt_number', type: "TEXT DEFAULT ''" },
+    { table: 'products', column: 'profit_margin', type: 'REAL DEFAULT 0' },
+  ];
+  for (const m of migrations) {
+    try {
+      const columns: string[] = [];
+      const info = db.exec(`PRAGMA table_info(${m.table})`);
+      if (info.length > 0) {
+        for (const row of info[0].values) {
+          columns.push(String(row[1]));
+        }
+      }
+      if (!columns.includes(m.column)) {
+        db.run(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`);
+        console.log(`✅ Migration: Added column ${m.column} to ${m.table}`);
+      }
+    } catch (err: any) {
+      if (!String(err.message).includes('duplicate column')) {
+        console.error(`Migration failed for ${m.table}.${m.column}:`, err);
+      }
+    }
+  }
+
+  const existingAdmin = db.exec(`SELECT id FROM users WHERE username = ?`, ['admin']);
+  if (existingAdmin.length === 0) {
+    const hashedPassword = bcrypt.hashSync('admin123', 10);
+    db.run(`INSERT INTO users (username, password, role, display_name) VALUES (?, ?, ?, ?)`,
+      ['admin', hashedPassword, 'مدير', 'المدير']);
   }
 
   saveDb();
@@ -174,6 +253,20 @@ export function run(sql: string, params: any[] = []): void {
   scheduleSave();
 }
 
+export function transaction<T>(fn: (db: Database) => T): T {
+  const db = getDb();
+  db.run('BEGIN TRANSACTION');
+  try {
+    const result = fn(db);
+    db.run('COMMIT');
+    scheduleSave();
+    return result;
+  } catch (err) {
+    db.run('ROLLBACK');
+    throw err;
+  }
+}
+
 // ═══ Active Memory Cache for AI ═══
 interface AIMemory {
   context: string;
@@ -192,7 +285,7 @@ export function invalidateAIMemory(): void {
 }
 
 export function isAIMemoryDirty(): boolean {
-  return aiMemory.dirty || (Date.now() - aiMemory.lastBuilt > 5 * 60 * 1000);
+  return aiMemory.dirty || (Date.now() - aiMemory.lastBuilt > 60 * 1000); // 60s max staleness
 }
 
 export function buildAIContext(): string {

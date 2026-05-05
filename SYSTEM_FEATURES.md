@@ -9,7 +9,7 @@
 | **التقنيات** | React 18 + TypeScript + Zustand + Tailwind CSS + Vite |
 | **الخادم** | Express.js + sql.js (SQLite) |
 | **سطح المكتب** | Electron 28 |
-| **الذكاء الاصطناعي** | GLM-5.1 عبر Z.AI API |
+| **الذكاء الاصطناعي** | Gemini 2.0 Flash عبر Google AI API |
 | **اللغة** | العربية (RTL) بالكامل |
 | **قاعدة البيانات** | SQLite (في الذاكرة مع حفظ تلقائي على القرص) |
 

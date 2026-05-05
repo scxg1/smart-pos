@@ -14,7 +14,7 @@ export default function ProductsPage() {
 
   const totalProducts = products.length;
   const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
-  const stockValue = products.reduce((sum, p) => sum + p.stock * p.cost_price, 0);
+  const stockValue = products.reduce((sum, p) => sum + p.stock * (p.cost_price || 0), 0);
   const lowStockCount = products.filter(p => p.stock < 5).length;
 
   const categories = useMemo(() => ['الكل', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))], [products]);
@@ -34,8 +34,8 @@ export default function ProductsPage() {
           await api.deleteProduct(product.id);
           addToast('success', `تم حذف المنتج "${product.name}"`);
           fetchProducts();
-        } catch {
-          addToast('error', 'فشل في حذف المنتج');
+        } catch (err: any) {
+          addToast('error', `فشل في حذف المنتج: ${err.message || 'خطأ في الاتصال'}`);
         }
         setConfirmDialog(null);
       },
@@ -125,9 +125,12 @@ export default function ProductsPage() {
               </thead>
               <tbody>
                 {filtered.map((product) => {
-                  const margin = product.selling_price > 0
-                    ? ((product.selling_price - product.cost_price) / product.selling_price * 100).toFixed(1)
+                  const hasPrice = product.selling_price !== null && product.selling_price !== undefined;
+                  const hasCostPrice = product.cost_price !== null && product.cost_price !== undefined;
+                  const margin = hasPrice && hasCostPrice && product.selling_price! > 0
+                    ? ((product.selling_price! - product.cost_price!) / product.selling_price! * 100).toFixed(1)
                     : '0';
+                  const profitMarginDisplay = product.profit_margin ? `${product.profit_margin}%` : '-';
                   const stockColor = product.stock >= 20 ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
                     : product.stock >= 5 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
                     : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400';
@@ -145,11 +148,16 @@ export default function ProductsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-medium text-text-primary dark:text-white">{product.name}</td>
+                      <td className="px-4 py-3 font-medium text-text-primary dark:text-white">
+                        <div className="flex items-center gap-1">
+                          {product.name}
+                          {!hasPrice && <span className="text-[9px] bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 px-1 rounded">سعر حر</span>}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-text-muted dark:text-slate-400">{product.category}</td>
                       <td className="px-4 py-3 text-text-muted dark:text-slate-400 font-mono text-xs">{product.barcode || '-'}</td>
-                      <td className="px-4 py-3 text-text-primary dark:text-white">{product.cost_price.toFixed(2)}</td>
-                      <td className="px-4 py-3 font-medium text-primary">{product.selling_price.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-text-primary dark:text-white">{hasCostPrice ? product.cost_price!.toFixed(2) : '—'}</td>
+                      <td className="px-4 py-3 font-medium text-primary">{hasPrice ? product.selling_price!.toFixed(2) : '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-medium ${parseFloat(margin) >= 30 ? 'text-green-600 dark:text-green-400' : parseFloat(margin) >= 15 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
                           {margin}%
@@ -218,7 +226,7 @@ function ConfirmDialog() {
 
 function ProductModal() {
   const { showProductModal, setShowProductModal, editingProduct, fetchProducts, addToast } = usePOSStore();
-  const [form, setForm] = useState({ name: '', category: '', barcode: '', cost_price: '', selling_price: '', stock: '', unit: 'قطعة' });
+  const [form, setForm] = useState({ name: '', category: '', barcode: '', cost_price: '', selling_price: '', stock: '', unit: 'قطعة', profit_margin: '' });
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
   const [saving, setSaving] = useState(false);
@@ -230,22 +238,25 @@ function ProductModal() {
         name: editingProduct.name,
         category: editingProduct.category,
         barcode: editingProduct.barcode,
-        cost_price: String(editingProduct.cost_price),
-        selling_price: String(editingProduct.selling_price),
+        cost_price: editingProduct.cost_price !== null && editingProduct.cost_price !== undefined ? String(editingProduct.cost_price) : '',
+        selling_price: editingProduct.selling_price !== null && editingProduct.selling_price !== undefined ? String(editingProduct.selling_price) : '',
         stock: String(editingProduct.stock),
         unit: editingProduct.unit,
+        profit_margin: String(editingProduct.profit_margin || ''),
       });
       setPreview(editingProduct.image_path ? (editingProduct.image_path.startsWith('http') ? editingProduct.image_path : `${API_BASE}${editingProduct.image_path}`) : '');
     } else {
-      setForm({ name: '', category: '', barcode: '', cost_price: '', selling_price: '', stock: '', unit: 'قطعة' });
+      setForm({ name: '', category: '', barcode: '', cost_price: '', selling_price: '', stock: '', unit: 'قطعة', profit_margin: '' });
       setPreview('');
       setImage(null);
     }
   }, [showProductModal, editingProduct]);
 
-  const margin = parseFloat(form.selling_price) > 0
+  const margin = parseFloat(form.selling_price) > 0 && parseFloat(form.cost_price) >= 0
     ? (((parseFloat(form.selling_price) - parseFloat(form.cost_price)) / parseFloat(form.selling_price)) * 100).toFixed(1)
     : '0';
+
+  const profitMarginVal = parseFloat(form.profit_margin) || 0;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -267,6 +278,7 @@ function ProductModal() {
       formData.append('selling_price', form.selling_price);
       formData.append('stock', form.stock);
       formData.append('unit', form.unit);
+      if (form.profit_margin) formData.append('profit_margin', form.profit_margin);
       if (image) formData.append('image', image);
       if (editingProduct?.image_path && !image) {
         formData.append('current_image', editingProduct.image_path);
@@ -282,8 +294,8 @@ function ProductModal() {
 
       fetchProducts();
       setShowProductModal(false);
-    } catch {
-      addToast('error', 'فشل في حفظ المنتج');
+    } catch (err: any) {
+      addToast('error', `فشل في حفظ المنتج: ${err.message || 'خطأ في الاتصال'}`);
     }
     setSaving(false);
   };
@@ -305,7 +317,7 @@ function ProductModal() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">الفئة *</label>
+          <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">الفئة</label>
           <input
             type="text"
             value={form.category}
@@ -330,44 +342,78 @@ function ProductModal() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">سعر الجملة *</label>
+            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">سعر الجملة</label>
             <input
-              type="number"
-              required
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={form.cost_price}
-              onChange={(e) => setForm({ ...form, cost_price: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || /^\d*\.?\d*$/.test(val)) setForm({ ...form, cost_price: val });
+              }}
+              placeholder="اختياري"
               className="w-full border border-card-border dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-text-primary dark:text-white focus:outline-none focus:border-primary"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">سعر البيع *</label>
+            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">سعر البيع</label>
             <input
-              type="number"
-              required
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={form.selling_price}
-              onChange={(e) => setForm({ ...form, selling_price: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || /^\d*\.?\d*$/.test(val)) setForm({ ...form, selling_price: val });
+              }}
+              placeholder="اختياري"
               className="w-full border border-card-border dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-text-primary dark:text-white focus:outline-none focus:border-primary"
             />
           </div>
         </div>
 
-        <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 text-sm text-text-primary dark:text-slate-300">
-          هامش الربح: <span className={`font-bold ${parseFloat(margin) >= 30 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>{margin}%</span>
+        <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          إذا تركت السعر فارغاً، سيُطلب منك إدخاله عند نقطة البيع
+        </div>
+
+        {parseFloat(form.selling_price) > 0 && (
+          <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 text-sm text-text-primary dark:text-slate-300">
+            هامش الربح المحسوب: <span className={`font-bold ${parseFloat(margin) >= 30 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>{margin}%</span>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">
+            هامش ربح لكل 100 ج.م مبيعات (%)
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={form.profit_margin}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '' || /^\d*\.?\d*$/.test(val)) setForm({ ...form, profit_margin: val });
+            }}
+            placeholder="مثال: 10 تعني 10 ج.م ربح لكل 100 ج.م مبيعات"
+            className="w-full border border-card-border dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-text-primary dark:text-white focus:outline-none focus:border-primary"
+          />
+          {profitMarginVal > 0 && (
+            <p className="text-[11px] text-text-muted dark:text-slate-500 mt-1">
+              {profitMarginVal}% هامش ربح — مثال: مبيعات 100 ج.م → ربح {profitMarginVal.toFixed(2)} ج.م
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">الكمية *</label>
+            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">الكمية</label>
             <input
-              type="number"
-              required
-              min="0"
+              type="text"
+              inputMode="numeric"
               value={form.stock}
-              onChange={(e) => setForm({ ...form, stock: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || /^\d+$/.test(val)) setForm({ ...form, stock: val });
+              }}
               className="w-full border border-card-border dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-text-primary dark:text-white focus:outline-none focus:border-primary"
             />
           </div>

@@ -1,17 +1,81 @@
 const BASE = 'http://localhost:3001/api';
 
-async function request(url: string, options?: RequestInit) {
-  const res = await fetch(`${BASE}${url}`, options);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Network error' }));
-    throw new Error(err.error || 'Request failed');
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+  if (token) {
+    localStorage.setItem('auth_token', token);
+  } else {
+    localStorage.removeItem('auth_token');
   }
-  return res.json();
+}
+
+export function getAuthToken(): string | null {
+  if (!authToken) {
+    authToken = localStorage.getItem('auth_token');
+  }
+  return authToken;
+}
+
+async function request(url: string, options?: RequestInit & { timeout?: number }) {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (options?.body && !(options.body instanceof FormData)) {
+    headers['Content-Type'] = (options.headers as any)?.['Content-Type'] || 'application/json';
+  }
+  const timeoutMs = options?.timeout || 30000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BASE}${url}`, { ...options, headers, signal: controller.signal });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(err.error || 'Request failed');
+    }
+    return res.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('انتهت مهلة الطلب. حاول مرة أخرى.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // Products
 export const api = {
-  // Products
+  login: (username: string, password: string) => request('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  }),
+  getMe: () => request('/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) => request('/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  }),
+  listUsers: () => request('/auth/users'),
+  createUser: (data: any) => request('/auth/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  deleteUser: (id: number) => request(`/auth/users/${id}`, { method: 'DELETE' }),
+
+  backupNow: () => request('/backup/now', { method: 'POST' }),
+  backupList: () => request('/backup/list'),
+  backupRestore: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request('/backup/restore', { method: 'POST', body: formData });
+  },
+
   getProducts: () => request('/products'),
   getLowStockProducts: () => request('/products/low-stock'),
   createProduct: (formData: FormData) => request('/products', { method: 'POST', body: formData }),
@@ -20,6 +84,10 @@ export const api = {
 
   // Sales
   getSales: () => request('/sales'),
+  searchSales: (params: Record<string, string>) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/sales/search?${qs}`);
+  },
   getSale: (id: number) => request(`/sales/${id}`),
   createSale: (data: any) => request('/sales', {
     method: 'POST',
@@ -97,6 +165,7 @@ export const api = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, session_id: sessionId }),
+    timeout: 180000,
   }),
   getChatSessions: () => request('/ai/sessions'),
   createChatSession: (title?: string) => request('/ai/sessions', {
@@ -112,4 +181,24 @@ export const api = {
   deleteChatSession: (id: number) => request(`/ai/sessions/${id}`, { method: 'DELETE' }),
   getChatMessages: (sessionId: number) => request(`/ai/sessions/${sessionId}/messages`),
   resetDatabase: () => request('/db/reset', { method: 'POST' }),
+
+  // Expenses
+  getExpenses: () => request('/expenses'),
+  getExpensesSummary: (from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    return request(`/expenses/summary?${params.toString()}`);
+  },
+  createExpense: (data: any) => request('/expenses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  updateExpense: (id: number, data: any) => request(`/expenses/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  deleteExpense: (id: number) => request(`/expenses/${id}`, { method: 'DELETE' }),
 };

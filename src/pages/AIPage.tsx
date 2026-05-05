@@ -51,30 +51,85 @@ function ActionBadge({ action }: { action: any }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function RenderContent({ content }: { content: string }) {
+  const parts: React.ReactNode[] = [];
+  const lines = content.split('\n');
+  let inTable = false;
+  let tableRows: string[][] = [];
+  let tableKey = 0;
+
+  const flushTable = () => {
+    if (tableRows.length > 0) {
+      const headers = tableRows[0];
+      const body = tableRows.slice(1);
+      parts.push(
+        <div key={tableKey++} className="overflow-x-auto my-3 rounded-xl border border-slate-200 dark:border-slate-700">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-700/50">
+                {headers.map((h, i) => (
+                  <th key={i} className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-600">{h.trim()}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((row, ri) => (
+                <tr key={ri} className="border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+                  {row.map((cell, ci) => (
+                    <td key={ci} className="px-3 py-2 text-slate-700 dark:text-slate-300">{cell.trim()}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      tableRows = [];
+      inTable = false;
+    }
+  };
+
+  lines.forEach((line, idx) => {
+    const cells = line.split('|').map(c => c.trim()).filter(c => c.length > 0);
+    const isSeparator = /^\s*[-:]+[-|\s:]*$/.test(line);
+    const isTableRow = line.includes('|') && cells.length >= 2 && !isSeparator;
+
+    if (isTableRow) {
+      if (!inTable) { flushTable(); inTable = true; }
+      tableRows.push(cells);
+    } else {
+      if (inTable) flushTable();
+      parts.push(<React.Fragment key={tableKey++}>{line}{idx < lines.length - 1 ? '\n' : ''}</React.Fragment>);
+    }
+  });
+  flushTable();
+
+  return <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 pt-1.5 whitespace-pre-wrap">{parts}</div>;
+}
+
+function MessageBubble({ msg, loadingSeconds, onCancel }: { msg: ChatMessage; loadingSeconds?: number; onCancel?: () => void }) {
   const isUser = msg.role === 'user';
 
   if (isUser) {
     return (
       <div className="flex justify-end w-full animate-fade-in-up mb-6">
          <div className="max-w-[80%] bg-slate-100 dark:bg-slate-800 px-5 py-3.5 rounded-3xl rounded-tl-sm text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 shadow-sm border border-slate-200 dark:border-slate-700/50">
-           {msg.content}
-           {msg.files && msg.files.length > 0 && (
-             <div className="mt-3 flex flex-wrap gap-2">
-               {msg.files.map((f, i) => (
-                 <div key={i} className="flex items-center gap-2 bg-white dark:bg-slate-700 px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-600 shadow-sm">
-                   <FileSpreadsheet size={14} className="text-emerald-500" />
-                   <span className="truncate max-w-[120px] font-medium" dir="ltr">{f.name}</span>
-                 </div>
-               ))}
-             </div>
-           )}
-         </div>
+            {msg.content}
+            {msg.files && msg.files.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {msg.files.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-white dark:bg-slate-700 px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-600 shadow-sm">
+                    <FileSpreadsheet size={14} className="text-emerald-500" />
+                    <span className="truncate max-w-[120px] font-medium" dir="ltr">{f.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
       </div>
     );
   }
 
-  // Assistant Bubble
   return (
     <div className="flex items-start gap-4 animate-fade-in-up w-full mb-6">
       <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 mt-1 bg-white dark:bg-slate-800 shadow-sm">
@@ -82,15 +137,26 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-2">
         {msg.loading ? (
-          <div className="h-8 flex items-center gap-1.5 px-2">
-            <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse" />
-            <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse delay-75" />
-            <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse delay-150" />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse delay-75" />
+              <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse delay-150" />
+              {loadingSeconds !== undefined && loadingSeconds > 0 && (
+                <span className="text-xs text-slate-400 dark:text-slate-500 mr-2">{loadingSeconds}ث</span>
+              )}
+            </div>
+            {loadingSeconds !== undefined && loadingSeconds > 10 && onCancel && (
+              <button
+                onClick={onCancel}
+                className="text-xs text-red-500 hover:text-red-600 transition-colors w-fit"
+              >
+                إلغاء الطلب
+              </button>
+            )}
           </div>
         ) : (
-          <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-200 pt-1.5 whitespace-pre-wrap">
-             {msg.content}
-          </div>
+          <RenderContent content={msg.content} />
         )}
         
         {msg.actions && msg.actions.length > 0 && (
@@ -153,7 +219,8 @@ export default function AIPage() {
     aiActiveSessionId: activeSessionId, 
     setAiActiveSessionId: setActiveSessionId,
     fetchProducts,
-    fetchCustomers
+    fetchCustomers,
+    addToast
   } = usePOSStore();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -162,6 +229,7 @@ export default function AIPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [recording, setRecording] = useState(false);
   const [interimText, setInterimText] = useState('');
+  const [loadingSeconds, setLoadingSeconds] = useState(0);
   
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -169,6 +237,8 @@ export default function AIPage() {
   const msgIdRef = useRef(0);
   const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef('');
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const loadingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -296,6 +366,22 @@ export default function AIPage() {
     } catch {}
   }, [activeSessionId, loadSessions]);
 
+  const cancelRequest = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (loadingTimerRef.current) {
+      clearInterval(loadingTimerRef.current);
+      loadingTimerRef.current = null;
+    }
+    setLoading(false);
+    setLoadingSeconds(0);
+    setMessages(prev => prev.map(m =>
+      m.loading ? { ...m, content: 'تم إلغاء الطلب.', loading: false } : m
+    ));
+  }, []);
+
   const send = async (text: string = input, files: File[] = selectedFiles) => {
     const q = text.trim();
     if ((!q && files.length === 0) || loading) return;
@@ -318,6 +404,11 @@ export default function AIPage() {
 
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setLoading(true);
+    setLoadingSeconds(0);
+
+    loadingTimerRef.current = setInterval(() => {
+      setLoadingSeconds(prev => prev + 1);
+    }, 1000);
 
     try {
       let filesContext = '';
@@ -325,17 +416,17 @@ export default function AIPage() {
         for (const file of files) {
           try {
             const buffer = await file.arrayBuffer();
-            let text = '';
+            let textContent = '';
             if (file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
-              text = new TextDecoder().decode(buffer);
+              textContent = new TextDecoder().decode(buffer);
             } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
               const wb = XLSX.read(buffer, { type: 'array' });
               const wsName = wb.SheetNames[0];
               const ws = wb.Sheets[wsName];
-              text = XLSX.utils.sheet_to_csv(ws);
+              textContent = XLSX.utils.sheet_to_csv(ws);
             }
-            if (text) {
-              filesContext += `\n\n--- محتوى الملف: ${file.name} ---\n${text.slice(0, 15000)}`; // limit size
+            if (textContent) {
+              filesContext += `\n\n--- محتوى الملف: ${file.name} ---\n${textContent.slice(0, 15000)}`;
             }
           } catch (e) {
             console.error('Failed to parse file', e);
@@ -348,6 +439,11 @@ export default function AIPage() {
       
       const { reply, actions } = await api.sendChat(history, sessionId!);
 
+      if (loadingTimerRef.current) {
+        clearInterval(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+
       setMessages(prev => {
         const newMsgs = prev.map(m =>
           m.id === loadingMsg.id
@@ -359,17 +455,26 @@ export default function AIPage() {
       loadSessions();
       
       if (actions && actions.length > 0) {
-        fetchProducts();
-        fetchCustomers();
+        await Promise.all([fetchProducts(), fetchCustomers()]);
+        const actionSummary = actions.map((a: any) => a.message).join('، ');
+        addToast('success', `تم تحديث البيانات: ${actionSummary}`);
       }
-    } catch {
+    } catch (err: any) {
+      if (loadingTimerRef.current) {
+        clearInterval(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+      const errorMsg = err.name === 'AbortError'
+        ? 'تم إلغاء الطلب.'
+        : err.message || 'عذراً، حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.';
       setMessages(prev => prev.map(m =>
         m.id === loadingMsg.id
-          ? { ...m, content: 'عذراً، حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.', loading: false }
+          ? { ...m, content: errorMsg, loading: false }
           : m
       ));
     }
     setLoading(false);
+    setLoadingSeconds(0);
   };
 
   sendRef.current = send;
@@ -457,16 +562,18 @@ export default function AIPage() {
               </button>
              
              <button
-               onClick={() => send()}
-               disabled={(!input.trim() && selectedFiles.length === 0) || loading}
-               className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
-                 (!input.trim() && selectedFiles.length === 0) || loading 
-                   ? 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500' 
-                   : 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:scale-105 shadow-md'
-               }`}
-             >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="rotate-180 transform -translate-x-0.5" />}
-             </button>
+                onClick={() => loading ? cancelRequest() : send()}
+                disabled={!loading && (!input.trim() && selectedFiles.length === 0)}
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
+                  loading
+                    ? 'bg-red-500 text-white hover:bg-red-600 shadow-md'
+                    : (!input.trim() && selectedFiles.length === 0)
+                    ? 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500' 
+                    : 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:scale-105 shadow-md'
+                }`}
+              >
+                 {loading ? <X size={16} /> : <Send size={16} className="rotate-180 transform -translate-x-0.5" />}
+              </button>
           </div>
         </div>
       </div>
@@ -552,7 +659,7 @@ export default function AIPage() {
             </div>
           ) : (
             <div className="flex-1 w-full max-w-3xl mx-auto py-8 space-y-6">
-              {messages.map(msg => <MessageBubble key={msg.id || Math.random()} msg={msg} />)}
+              {messages.map(msg => <MessageBubble key={msg.id || Math.random()} msg={msg} loadingSeconds={loadingSeconds} onCancel={cancelRequest} />)}
               <div ref={bottomRef} />
             </div>
           )}

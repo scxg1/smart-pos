@@ -2,4 +2,9 @@ node_modules/
 .env  
 dist/  
 release/  
+release-build/  
+server-build/  
+server-dist/  
 data/*.db  
+server-debug.log
+*.tsbuildinfo

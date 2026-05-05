@@ -1,10 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { queryAll, queryOne, run, invalidateAIMemory } from '../db';
+import { queryAll, queryOne, run, transaction, invalidateAIMemory } from '../db';
+import { authenticate } from '../middleware/auth';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+const uploadsDir = process.env.DATA_DIR
+  ? path.join(process.env.DATA_DIR, 'uploads')
+  : path.join(__dirname, '..', '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -37,7 +40,7 @@ export const upload = multer({
 
 const router = Router();
 
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', authenticate, (_req: Request, res: Response) => {
   try {
     const products = queryAll('SELECT * FROM products ORDER BY id DESC');
     res.json(products);
@@ -46,7 +49,7 @@ router.get('/', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/low-stock', (_req: Request, res: Response) => {
+router.get('/low-stock', authenticate, (_req: Request, res: Response) => {
   try {
     const products = queryAll('SELECT * FROM products WHERE stock < 5');
     res.json(products);
@@ -55,51 +58,83 @@ router.get('/low-stock', (_req: Request, res: Response) => {
   }
 });
 
-router.post('/', upload.single('image'), (req: Request, res: Response) => {
+router.post('/', authenticate, upload.single('image'), (req: Request, res: Response) => {
   try {
-    const { name, category, barcode, cost_price, selling_price, stock, unit } = req.body;
+    const { name, category, barcode, cost_price, selling_price, stock, unit, profit_margin } = req.body;
     const image_path = req.file ? `/uploads/${req.file.filename}` : '';
 
-    run(
-      `INSERT INTO products (name, category, barcode, cost_price, selling_price, stock, unit, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, category || 'عام', barcode || '', parseFloat(cost_price) || 0, parseFloat(selling_price) || 0, parseInt(stock) || 0, unit || 'قطعة', image_path]
-    );
+    if (!name || !name.trim()) {
+      res.status(400).json({ error: 'اسم المنتج مطلوب' });
+      return;
+    }
+
+    const costPrice = cost_price !== '' && cost_price !== undefined ? parseFloat(cost_price) : null;
+    const sellingPrice = selling_price !== '' && selling_price !== undefined ? parseFloat(selling_price) : null;
+    const stockVal = parseInt(stock) || 0;
+    const profitMargin = parseFloat(profit_margin) || 0;
+
+    transaction(() => {
+      run(
+        `INSERT INTO products (name, category, barcode, cost_price, selling_price, stock, unit, image_path, profit_margin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name.trim(), category || 'عام', barcode || '', costPrice, sellingPrice, stockVal, unit || 'قطعة', image_path, profitMargin]
+      );
+    });
+    invalidateAIMemory();
 
     const product = queryOne('SELECT * FROM products ORDER BY id DESC LIMIT 1');
-    invalidateAIMemory();
     res.status(201).json(product);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.put('/:id', upload.single('image'), (req: Request, res: Response) => {
+router.put('/:id', authenticate, upload.single('image'), (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, category, barcode, cost_price, selling_price, stock, unit } = req.body;
+    const { name, category, barcode, cost_price, selling_price, stock, unit, profit_margin } = req.body;
 
-    let imagePath = req.body.current_image || '';
+    const existing = queryOne('SELECT * FROM products WHERE id = ?', [id]);
+    if (!existing) {
+      res.status(404).json({ error: 'المنتج غير موجود' });
+      return;
+    }
+
+    let imagePath = req.body.current_image || existing.image_path || '';
     if (req.file) {
       imagePath = `/uploads/${req.file.filename}`;
     }
 
-    run(
-      `UPDATE products SET name=?, category=?, barcode=?, cost_price=?, selling_price=?, stock=?, unit=?, image_path=? WHERE id=?`,
-      [name, category || 'عام', barcode || '', parseFloat(cost_price) || 0, parseFloat(selling_price) || 0, parseInt(stock) || 0, unit || 'قطعة', imagePath, id]
-    );
+    const costPrice = cost_price !== '' && cost_price !== undefined ? parseFloat(cost_price) : null;
+    const sellingPrice = selling_price !== '' && selling_price !== undefined ? parseFloat(selling_price) : null;
+    const stockVal = parseInt(stock) || 0;
+    const profitMargin = profit_margin !== '' && profit_margin !== undefined ? parseFloat(profit_margin) : existing.profit_margin || 0;
+
+    transaction(() => {
+      run(
+        `UPDATE products SET name=?, category=?, barcode=?, cost_price=?, selling_price=?, stock=?, unit=?, image_path=?, profit_margin=? WHERE id=?`,
+        [name || existing.name, category || existing.category, barcode ?? existing.barcode, costPrice, sellingPrice, stockVal, unit || existing.unit, imagePath, profitMargin, id]
+      );
+    });
+    invalidateAIMemory();
 
     const product = queryOne('SELECT * FROM products WHERE id = ?', [id]);
-    invalidateAIMemory();
     res.json(product);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', authenticate, (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    run('DELETE FROM products WHERE id = ?', [id]);
+    const existing = queryOne('SELECT * FROM products WHERE id = ?', [id]);
+    if (!existing) {
+      res.status(404).json({ error: 'المنتج غير موجود' });
+      return;
+    }
+    transaction(() => {
+      run('DELETE FROM products WHERE id = ?', [id]);
+    });
     invalidateAIMemory();
     res.json({ success: true });
   } catch (err: any) {

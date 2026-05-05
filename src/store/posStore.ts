@@ -6,11 +6,13 @@ export interface Product {
   name: string;
   category: string;
   barcode: string;
-  cost_price: number;
-  selling_price: number;
+  cost_price: number | null;
+  selling_price: number | null;
   stock: number;
+  max_stock: number;
   unit: string;
   image_path: string;
+  profit_margin: number;
   created_at: string;
 }
 
@@ -31,6 +33,8 @@ export interface CartItem {
   unit: string;
   image_path: string;
   category: string;
+  needs_price: boolean;
+  profit_margin: number;
 }
 
 export interface Sale {
@@ -55,9 +59,11 @@ export interface ToastItem {
 }
 
 interface POSState {
-  // Navigation
   activePage: string;
   setActivePage: (page: string) => void;
+
+  currentUser: { id: number; username: string; role: string; display_name?: string } | null;
+  setCurrentUser: (user: any | null) => void;
 
   // Products
   products: Product[];
@@ -132,9 +138,10 @@ interface POSState {
 let toastId = 0;
 
 export const usePOSStore = create<POSState>((set, get) => ({
-  // Navigation
   activePage: 'cashier',
   setActivePage: (page) => set({ activePage: page }),
+  currentUser: null,
+  setCurrentUser: (user) => set({ currentUser: user }),
 
   // Products
   products: [],
@@ -146,7 +153,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       set({ products, productsLoading: false });
     } catch (err: any) {
       set({ productsLoading: false });
-      get().addToast('error', 'فشل في تحميل المنتجات');
+      get().addToast('error', `فشل في تحميل المنتجات: ${err.message || 'خطأ في الاتصال'}`);
     }
   },
 
@@ -161,8 +168,10 @@ export const usePOSStore = create<POSState>((set, get) => ({
   addToCart: (product) => {
     const { cart } = get();
     const existing = cart.find(item => item.product_id === product.id);
+    const needsPrice = product.selling_price === null || product.selling_price === undefined;
+
     if (existing) {
-      if (existing.quantity >= product.stock) {
+      if (!needsPrice && existing.quantity >= product.stock) {
         get().addToast('warning', 'المخزون غير كافٍ');
         return;
       }
@@ -174,7 +183,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
         ),
       });
     } else {
-      if (product.stock <= 0) {
+      if (!needsPrice && product.stock <= 0) {
         get().addToast('warning', 'المنتج غير متوفر في المخزون');
         return;
       }
@@ -183,11 +192,13 @@ export const usePOSStore = create<POSState>((set, get) => ({
           product_id: product.id,
           name: product.name,
           quantity: 1,
-          unit_price: product.selling_price,
-          cost_price: product.cost_price,
+          unit_price: needsPrice ? 0 : (product.selling_price || 0),
+          cost_price: product.cost_price || 0,
           unit: product.unit,
           image_path: product.image_path,
           category: product.category,
+          needs_price: needsPrice,
+          profit_margin: product.profit_margin || 0,
         }],
       });
     }
@@ -245,23 +256,45 @@ export const usePOSStore = create<POSState>((set, get) => ({
     const { cart, cartCustomer, cartDiscount, cartNote, paymentMethod } = get();
     if (cart.length === 0) return;
 
+    const needsPrice = cart.filter(item => item.needs_price || item.unit_price <= 0);
+    if (needsPrice.length > 0) {
+      get().addToast('error', `يرجى تحديد سعر للمنتجات: ${needsPrice.map(i => i.name).join('، ')}`);
+      return;
+    }
+
     const subtotal = get().getCartSubtotal();
     const tax = get().getCartTax();
     const total = get().getCartTotal();
-    const costTotal = cart.reduce((sum, item) => sum + item.cost_price * item.quantity, 0);
-    const profit = total - tax - costTotal;
+    const discountAmount = subtotal * get().cartDiscount / 100;
+    const revenueAfterDiscount = subtotal - discountAmount;
+    const costTotal = cart.reduce((sum, item) => {
+      if (item.cost_price > 0) return sum + item.cost_price * item.quantity;
+      if (item.profit_margin > 0 && item.unit_price > 0) {
+        const derivedCost = item.unit_price * (1 - item.profit_margin / 100);
+        return sum + derivedCost * item.quantity;
+      }
+      return sum;
+    }, 0);
+    const profit = revenueAfterDiscount - costTotal;
 
     try {
       const sale = await api.createSale({
         customer_id: cartCustomer?.id || null,
-        items: cart.map(item => ({
-          product_id: item.product_id,
-          name: item.name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          cost_price: item.cost_price,
-          subtotal: item.unit_price * item.quantity,
-        })),
+        items: cart.map(item => {
+          let effectiveCostPrice = item.cost_price;
+          if ((!item.cost_price || item.cost_price <= 0) && item.profit_margin > 0 && item.unit_price > 0) {
+            effectiveCostPrice = item.unit_price * (1 - item.profit_margin / 100);
+          }
+          return {
+            product_id: item.product_id,
+            name: item.name,
+            category: item.category,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            cost_price: effectiveCostPrice,
+            subtotal: item.unit_price * item.quantity,
+          };
+        }),
         total,
         cost_total: costTotal,
         profit,
@@ -271,8 +304,16 @@ export const usePOSStore = create<POSState>((set, get) => ({
         note: cartNote,
       });
 
+      const saleWithCategories = {
+        ...sale,
+        items: sale.items.map((si: any) => {
+          const cartItem = cart.find(c => c.product_id === si.product_id);
+          return { ...si, category: cartItem?.category };
+        })
+      };
+
       set({
-        lastSale: sale,
+        lastSale: saleWithCategories,
         showReceipt: true,
         cart: [],
         cartCustomer: null,
@@ -282,7 +323,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
       get().addToast('success', 'تمت عملية البيع بنجاح');
       get().fetchProducts();
     } catch (err: any) {
-      get().addToast('error', 'فشل في إتمام عملية البيع');
+      console.error('Sale failed:', err);
+      get().addToast('error', `فشل في إتمام عملية البيع: ${err.message}`);
     }
   },
 
@@ -293,7 +335,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       const customers = await api.getCustomers();
       set({ customers });
     } catch (err: any) {
-      get().addToast('error', 'فشل في تحميل العملاء');
+      get().addToast('error', `فشل في تحميل العملاء: ${err.message || 'خطأ في الاتصال'}`);
     }
   },
 
@@ -311,9 +353,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
     try {
       await api.updateSettings(newSettings);
       set({ settings: newSettings, taxEnabled: newSettings.tax_enabled === 'true' });
-      get().addToast('success', 'تم حفظ الإعدادات');
+      get().addToast('success', 'تم حفظ الإعدادات بنجاح');
     } catch (err: any) {
-      get().addToast('error', 'فشل في حفظ الإعدادات');
+      get().addToast('error', `فشل في حفظ الإعدادات: ${err.message || 'خطأ في الاتصال بالخادم'}`);
     }
   },
 
@@ -345,7 +387,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       set({ aiInsights: result.insights || [], aiLoading: false });
     } catch (err: any) {
       set({ aiLoading: false });
-      get().addToast('error', 'فشل في الحصول على الرؤى');
+      get().addToast('error', `فشل في الحصول على الرؤى: ${err.message || 'خطأ في الاتصال'}`);
     }
   },
   fetchAIUpsell: async () => {

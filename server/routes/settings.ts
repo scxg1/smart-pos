@@ -1,10 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { queryAll, run } from '../db';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-// GET all settings as key/value object
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', authenticate, (_req: Request, res: Response) => {
   try {
     const rows = queryAll('SELECT key, value FROM settings');
     const settings: Record<string, string> = {};
@@ -17,8 +17,7 @@ router.get('/', (_req: Request, res: Response) => {
   }
 });
 
-// PUT update multiple settings
-router.put('/', (req: Request, res: Response) => {
+router.put('/', authenticate, (req: Request, res: Response) => {
   try {
     const settings = req.body;
     for (const [key, value] of Object.entries(settings)) {

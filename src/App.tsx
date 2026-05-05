@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Sidebar from './components/Sidebar';
 import Toast from './components/Toast';
 import CashierPage from './pages/CashierPage';
@@ -7,26 +7,34 @@ import ReportsPage from './pages/ReportsPage';
 import CustomersPage from './pages/CustomersPage';
 import SettingsPage from './pages/SettingsPage';
 import AIPage from './pages/AIPage';
+import ExpensesPage from './pages/ExpensesPage';
+import SalesPage from './pages/SalesPage';
+import LoginPage from './pages/LoginPage';
 import { usePOSStore } from './store/posStore';
 import { useThemeStore } from './store/themeStore';
 import { Bell, Sun, Moon } from 'lucide-react';
+import { setAuthToken, getAuthToken } from './lib/api';
 
 const pages: Record<string, React.FC> = {
   cashier: CashierPage,
   products: ProductsPage,
   reports: ReportsPage,
+  sales: SalesPage,
   customers: CustomersPage,
   ai: AIPage,
   settings: SettingsPage,
+  expenses: ExpensesPage,
 };
 
 const pageMeta: Record<string, { title: string; sub: string }> = {
-  cashier:   { title: 'نقطة البيع',  sub: 'إدارة المبيعات والكاشير'          },
-  products:  { title: 'المنتجات',    sub: 'إدارة المخزون والأصناف'            },
-  reports:   { title: 'التقارير',    sub: 'تحليلات وإحصائيات المبيعات'        },
-  customers: { title: 'العملاء',     sub: 'إدارة بيانات وسجل العملاء'         },
-  ai:        { title: 'المساعد الذكي', sub: 'مدير النظام بالذكاء الاصطناعي'    },
-  settings:  { title: 'الإعدادات',   sub: 'ضبط إعدادات النظام والمتجر'        },
+  cashier:  { title: 'نقطة البيع',     sub: 'إدارة المبيعات والكاشير' },
+  products: { title: 'المنتجات',       sub: 'إدارة المخزون والأصناف' },
+  reports:  { title: 'التقارير',       sub: 'تحليلات وإحصائيات المبيعات' },
+  sales:    { title: 'الفواتير',       sub: 'سجل جميع الفواتير والعمليات' },
+  customers:{ title: 'العملاء',        sub: 'إدارة بيانات وسجل العملاء' },
+  ai:       { title: 'المساعد الذكي',  sub: 'مدير النظام بالذكاء الاصطناعي' },
+  settings: { title: 'الإعدادات',      sub: 'ضبط إعدادات النظام والمتجر' },
+  expenses: { title: 'المصروفات',      sub: 'تسجيل ومتابعة المصاريف والنفقات' },
 };
 
 function TopBar() {
@@ -44,19 +52,16 @@ function TopBar() {
         <h1 className="text-[15px] font-bold text-text-primary dark:text-white">{meta.title}</h1>
         <p className="text-xs text-text-muted dark:text-slate-400 mt-[3px]">{meta.sub}</p>
       </div>
-
       <div className="flex items-center gap-3">
         <span className="hidden sm:block text-xs text-text-muted dark:text-slate-400 bg-gray-50 dark:bg-slate-700 border border-card-border dark:border-slate-600 px-3 py-1.5 rounded-lg">
           {dateStr}
         </span>
-
         <button
           onClick={toggleTheme}
           className="w-9 h-9 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 border border-card-border dark:border-slate-600 flex items-center justify-center text-text-muted dark:text-slate-400 transition-colors"
         >
           {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
         </button>
-
         <button className="relative w-9 h-9 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 border border-card-border dark:border-slate-600 flex items-center justify-center text-text-muted dark:text-slate-400 transition-colors">
           <Bell size={16} />
           {lowStockCount > 0 && (
@@ -71,8 +76,9 @@ function TopBar() {
 }
 
 export default function App() {
-  const { activePage, fetchSettings, fetchProducts } = usePOSStore();
+  const { activePage, fetchSettings, fetchProducts, currentUser, setCurrentUser, fetchCustomers } = usePOSStore();
   const { setTheme } = useThemeStore();
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('theme') || 'light';
@@ -80,9 +86,45 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetchSettings();
-    fetchProducts();
+    const token = getAuthToken();
+    if (token) {
+      const savedUser = localStorage.getItem('auth_user');
+      if (savedUser) {
+        try {
+          setCurrentUser(JSON.parse(savedUser));
+        } catch {
+          setAuthToken(null);
+          localStorage.removeItem('auth_user');
+        }
+      }
+    }
+    setAuthChecked(true);
   }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchSettings();
+      fetchProducts();
+      if (activePage === 'customers' || activePage === 'cashier') {
+        fetchCustomers();
+      }
+    }
+  }, [currentUser, activePage]);
+
+  if (!authChecked) return null;
+
+  if (!currentUser) {
+    return (
+      <>
+        <LoginPage onLogin={(token, user) => {
+          setAuthToken(token);
+          setCurrentUser(user);
+          localStorage.setItem('auth_user', JSON.stringify(user));
+        }} />
+        <Toast />
+      </>
+    );
+  }
 
   const PageComponent = pages[activePage] || CashierPage;
 

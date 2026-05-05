@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   TrendingUp, DollarSign, FileText, Sparkles, Loader2, Award,
   ShoppingBag, ArrowUpRight, Calendar, BarChart3, Target, Receipt,
-  CreditCard, Banknote, Clock, PackageOpen,
+  CreditCard, Banknote, Clock, PackageOpen, Download,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, Cell,
   PieChart, Pie, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, CartesianGrid as Grid,
 } from 'recharts';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { api } from '../lib/api';
 import { usePOSStore } from '../store/posStore';
 
@@ -130,6 +132,32 @@ export default function ReportsPage() {
   const [byCategory, setByCategory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [recentSales, setRecentSales] = useState<any[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [prevSummary, setPrevSummary] = useState<Summary>({
+    invoice_count: 0, total_sales: 0, total_profit: 0,
+    total_cost: 0, profit_margin: '0', avg_invoice: 0,
+  });
+
+  const exportPDF = async () => {
+    if (!reportRef.current) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 190;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+      const dateStr = new Date().toISOString().split('T')[0];
+      pdf.save(`تقرير_${dateStr}.pdf`);
+    } catch {}
+    setExporting(false);
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -145,8 +173,29 @@ export default function ReportsPage() {
       setDaily(day);
       setTopProducts(top);
       setByCategory(cat);
-    } catch {
-      addToast('error', 'فشل في تحميل التقارير');
+
+      let prevFrom = '';
+      let prevTo = '';
+      if (from && to) {
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
+        const diff = (toDate.getTime() - fromDate.getTime()) / 86400000;
+        const prevToDate = new Date(fromDate.getTime() - 86400000);
+        const prevFromDate = new Date(prevToDate.getTime() - diff * 86400000);
+        prevFrom = prevFromDate.toISOString().split('T')[0];
+        prevTo = prevToDate.toISOString().split('T')[0];
+      } else {
+        const now = new Date();
+        prevFrom = new Date(now.getTime() - 14 * 86400000).toISOString().split('T')[0];
+        prevTo = new Date(now.getTime() - 7 * 86400000).toISOString().split('T')[0];
+      }
+      try {
+        const prevSum = await api.getReportsSummary(prevFrom, prevTo);
+        const prevAvg = prevSum.invoice_count > 0 ? prevSum.total_sales / prevSum.invoice_count : 0;
+        setPrevSummary({ ...prevSum, avg_invoice: prevAvg });
+      } catch {}
+    } catch (err: any) {
+      addToast('error', `فشل في تحميل التقارير: ${err.message || 'خطأ في الاتصال'}`);
     }
     setLoading(false);
   };
@@ -198,11 +247,15 @@ export default function ReportsPage() {
 
   const hasData = summary.invoice_count > 0;
 
+  const getChange = (current: number, previous: number): number => {
+    if (previous === 0) return 0;
+    return Math.round(((current - previous) / previous) * 100);
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-900">
       <div className="p-6 space-y-5 max-w-[1440px] mx-auto">
 
-        {/* ══ Header ══ */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-200">
@@ -213,14 +266,23 @@ export default function ReportsPage() {
               <p className="text-sm text-slate-400 mt-0.5">تحليل شامل لأداء المبيعات والأرباح</p>
             </div>
           </div>
-          <button
-            onClick={handleAI} disabled={aiLoading}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg shadow-violet-200
-                       bg-gradient-to-l from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition-all disabled:opacity-50"
-          >
-            {aiLoading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-            تحليل ذكي
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportPDF} disabled={exporting || !hasData}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all disabled:opacity-50"
+            >
+              {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              تصدير PDF
+            </button>
+            <button
+              onClick={handleAI} disabled={aiLoading}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg shadow-violet-200
+                         bg-gradient-to-l from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition-all disabled:opacity-50"
+            >
+              {aiLoading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+              تحليل ذكي
+            </button>
+          </div>
         </div>
 
         {/* ══ AI Insights ══ */}
@@ -280,7 +342,7 @@ export default function ReportsPage() {
             <p className="text-sm text-slate-400">جاري تحميل البيانات...</p>
           </div>
         ) : (
-          <>
+          <div ref={reportRef}>
             {/* ══ KPI Cards ══ */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
@@ -292,6 +354,7 @@ export default function ReportsPage() {
                   icon: DollarSign,
                   bg: 'from-blue-500 to-blue-700',
                   shadow: 'shadow-blue-200/50',
+                  change: getChange(summary.total_sales, prevSummary.total_sales),
                 },
                 {
                   label: 'صافي الأرباح',
@@ -301,6 +364,7 @@ export default function ReportsPage() {
                   icon: TrendingUp,
                   bg: 'from-emerald-500 to-emerald-700',
                   shadow: 'shadow-emerald-200/50',
+                  change: getChange(summary.total_profit, prevSummary.total_profit),
                 },
                 {
                   label: 'متوسط الفاتورة',
@@ -310,6 +374,7 @@ export default function ReportsPage() {
                   icon: Target,
                   bg: 'from-violet-500 to-violet-700',
                   shadow: 'shadow-violet-200/50',
+                  change: getChange(summary.avg_invoice, prevSummary.avg_invoice),
                 },
                 {
                   label: 'إجمالي الفواتير',
@@ -319,6 +384,7 @@ export default function ReportsPage() {
                   icon: Receipt,
                   bg: 'from-amber-500 to-amber-700',
                   shadow: 'shadow-amber-200/50',
+                  change: getChange(summary.invoice_count, prevSummary.invoice_count),
                 },
               ].map((k, i) => (
                 <div key={i} className={`rounded-2xl p-5 bg-gradient-to-br ${k.bg} text-white shadow-lg ${k.shadow} relative overflow-hidden`}>
@@ -329,7 +395,15 @@ export default function ReportsPage() {
                       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
                         <k.icon size={18} className="text-white" />
                       </div>
-                      <span className="text-white/60 text-[11px] font-medium bg-white/10 px-2 py-0.5 rounded-md">{k.sub}</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-white/60 text-[11px] font-medium bg-white/10 px-2 py-0.5 rounded-md">{k.sub}</span>
+                        {k.change !== 0 && (
+                          <span className={`text-[11px] font-bold flex items-center gap-0.5 ${k.change > 0 ? 'text-emerald-200' : 'text-red-200'}`}>
+                            {k.change > 0 ? <ArrowUpRight size={11} /> : <ArrowUpRight size={11} className="rotate-90" />}
+                            {k.change > 0 ? '+' : ''}{k.change}%
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <p className="text-2xl lg:text-3xl font-black leading-none tracking-tight tabular-nums">
                       {k.value}
@@ -479,14 +553,23 @@ export default function ReportsPage() {
 
               {/* Recent Sales Table */}
               <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-50 dark:border-slate-700/50 flex items-center gap-2.5 bg-gradient-to-l from-blue-50/50 dark:from-blue-500/10 to-transparent">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
-                    <ShoppingBag size={15} className="text-blue-600 dark:text-blue-400" />
+                <div className="px-5 py-4 border-b border-slate-50 dark:border-slate-700/50 flex items-center justify-between bg-gradient-to-l from-blue-50/50 dark:from-blue-500/10 to-transparent">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
+                      <ShoppingBag size={15} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-800 dark:text-white text-sm">آخر الفواتير</h3>
+                      <p className="text-[11px] text-slate-400">أحدث عمليات البيع المسجلة</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800 dark:text-white text-sm">آخر الفواتير</h3>
-                    <p className="text-[11px] text-slate-400">أحدث عمليات البيع المسجلة</p>
-                  </div>
+                  <button
+                    onClick={() => usePOSStore.getState().setActivePage('sales')}
+                    className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-500/20 transition-colors"
+                  >
+                    عرض الكل
+                    <ArrowUpRight size={12} />
+                  </button>
                 </div>
                 {recentSales.length > 0 ? (
                   <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
@@ -565,7 +648,7 @@ export default function ReportsPage() {
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

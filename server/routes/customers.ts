@@ -1,57 +1,75 @@
 import { Router, Request, Response } from 'express';
-import { queryAll, queryOne, run, invalidateAIMemory } from '../db';
+import { queryAll, queryOne, run, transaction, invalidateAIMemory } from '../db';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-// GET all customers
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', authenticate, (_req: Request, res: Response) => {
   try {
-    const customers = queryAll('SELECT * FROM customers ORDER BY id DESC');
-    // Add last visit info
-    const enriched = customers.map(customer => {
-      const lastSale = queryOne(
-        'SELECT created_at FROM sales WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1',
-        [customer.id]
-      );
-      return { ...customer, last_visit: lastSale?.created_at || null };
-    });
-    res.json(enriched);
+    const customers = queryAll(`
+      SELECT c.*,
+             (SELECT created_at FROM sales WHERE customer_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_visit
+      FROM customers c
+      ORDER BY c.id DESC
+    `);
+    res.json(customers);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST create customer
-router.post('/', (req: Request, res: Response) => {
+router.post('/', authenticate, (req: Request, res: Response) => {
   try {
     const { name, phone } = req.body;
-    run('INSERT INTO customers (name, phone) VALUES (?, ?)', [name, phone || '']);
-    const customer = queryOne('SELECT * FROM customers ORDER BY id DESC LIMIT 1');
+    if (!name || !name.trim()) {
+      res.status(400).json({ error: 'اسم العميل مطلوب' });
+      return;
+    }
+    transaction(() => {
+      run('INSERT INTO customers (name, phone, total_purchases) VALUES (?, ?, 0)', [name.trim(), phone || '']);
+    });
     invalidateAIMemory();
+    const customer = queryOne('SELECT * FROM customers ORDER BY id DESC LIMIT 1');
     res.status(201).json(customer);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// PUT update customer
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', authenticate, (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, phone } = req.body;
-    run('UPDATE customers SET name=?, phone=? WHERE id=?', [name, phone || '', id]);
-    const customer = queryOne('SELECT * FROM customers WHERE id = ?', [id]);
+    const existing = queryOne('SELECT * FROM customers WHERE id = ?', [id]);
+    if (!existing) {
+      res.status(404).json({ error: 'العميل غير موجود' });
+      return;
+    }
+    transaction(() => {
+      run('UPDATE customers SET name=?, phone=? WHERE id=?', [
+        name !== undefined ? name : existing.name,
+        phone !== undefined ? phone : existing.phone,
+        id
+      ]);
+    });
     invalidateAIMemory();
+    const customer = queryOne('SELECT * FROM customers WHERE id = ?', [id]);
     res.json(customer);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// DELETE customer
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', authenticate, (req: Request, res: Response) => {
   try {
-    run('DELETE FROM customers WHERE id = ?', [req.params.id]);
+    const existing = queryOne('SELECT * FROM customers WHERE id = ?', [req.params.id]);
+    if (!existing) {
+      res.status(404).json({ error: 'العميل غير موجود' });
+      return;
+    }
+    transaction(() => {
+      run('DELETE FROM customers WHERE id = ?', [req.params.id]);
+    });
     invalidateAIMemory();
     res.json({ success: true });
   } catch (err: any) {
@@ -59,8 +77,7 @@ router.delete('/:id', (req: Request, res: Response) => {
   }
 });
 
-// GET customer purchase history
-router.get('/:id/sales', (req: Request, res: Response) => {
+router.get('/:id/sales', authenticate, (req: Request, res: Response) => {
   try {
     const sales = queryAll('SELECT * FROM sales WHERE customer_id = ? ORDER BY id DESC', [req.params.id]);
     const salesWithItems = sales.map(sale => {

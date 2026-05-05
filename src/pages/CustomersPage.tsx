@@ -50,8 +50,8 @@ export default function CustomersPage() {
           await api.deleteCustomer(customer.id);
           addToast('success', 'تم حذف العميل');
           fetchCustomers();
-        } catch {
-          addToast('error', 'فشل في حذف العميل');
+        } catch (err: any) {
+          addToast('error', `فشل في حذف العميل: ${err.message || 'خطأ في الاتصال'}`);
         }
         setConfirmDialog(null);
       },
@@ -64,8 +64,8 @@ export default function CustomersPage() {
     try {
       const sales = await api.getCustomerSales(customer.id);
       setHistorySales(sales);
-    } catch {
-      addToast('error', 'فشل في تحميل سجل المشتريات');
+    } catch (err: any) {
+      addToast('error', `فشل في تحميل سجل المشتريات: ${err.message || 'خطأ في الاتصال'}`);
     }
     setHistoryLoading(false);
   };
@@ -270,8 +270,8 @@ function CustomerModal() {
       }
       fetchCustomers();
       setShowCustomerModal(false);
-    } catch {
-      addToast('error', 'فشل في حفظ العميل');
+    } catch (err: any) {
+      addToast('error', `فشل في حفظ العميل: ${err.message || 'خطأ في الاتصال'}`);
     }
     setSaving(false);
   };

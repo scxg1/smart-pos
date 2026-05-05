@@ -1,21 +1,26 @@
 import React, { useState } from 'react';
-import { ShoppingCart, Package, BarChart2, Users, Settings, Store, Sparkles, Menu, ChevronRight, Bot } from 'lucide-react';
+import { ShoppingCart, Package, BarChart2, Users, Settings, Store, Sparkles, Menu, ChevronRight, Bot, LogOut, Wallet, FileText } from 'lucide-react';
 import { usePOSStore } from '../store/posStore';
+import { setAuthToken } from '../lib/api';
 
-const navItems = [
-  { id: 'cashier',   icon: ShoppingCart, label: 'البيع'       },
-  { id: 'products',  icon: Package,      label: 'المنتجات'   },
-  { id: 'reports',   icon: BarChart2,    label: 'التقارير'   },
-  { id: 'customers', icon: Users,        label: 'العملاء'    },
-  { id: 'ai',        icon: Bot,          label: 'المساعد'    },
-  { id: 'settings',  icon: Settings,     label: 'الإعدادات'  },
+const allNavItems = [
+  { id: 'cashier',   icon: ShoppingCart, label: 'البيع',       roles: ['مدير', 'كاشير'] },
+  { id: 'products',  icon: Package,      label: 'المنتجات',   roles: ['مدير', 'كاشير'] },
+  { id: 'sales',     icon: FileText,     label: 'الفواتير',   roles: ['مدير'] },
+  { id: 'reports',   icon: BarChart2,    label: 'التقارير',   roles: ['مدير'] },
+  { id: 'expenses',  icon: Wallet,       label: 'المصروفات',  roles: ['مدير'] },
+  { id: 'customers', icon: Users,        label: 'العملاء',    roles: ['مدير', 'كاشير'] },
+  { id: 'ai',        icon: Bot,          label: 'المساعد',    roles: ['مدير', 'كاشير'] },
+  { id: 'settings',  icon: Settings,     label: 'الإعدادات',  roles: ['مدير'] },
 ];
 
 export default function Sidebar() {
-  const { activePage, setActivePage, products, settings } = usePOSStore();
+  const { activePage, setActivePage, products, settings, currentUser, setCurrentUser } = usePOSStore();
   const [collapsed, setCollapsed] = useState(true);
   const lowStockCount = products.filter(p => p.stock < 5).length;
   const storeName = settings.store_name || 'نقطة البيع';
+  const userRole = currentUser?.role || 'كاشير';
+  const navItems = allNavItems.filter(item => item.roles.includes(userRole));
 
   return (
     <aside
@@ -130,23 +135,45 @@ export default function Sidebar() {
         style={{ padding: collapsed ? '12px 8px' : '12px 12px' }}
       >
         {collapsed ? (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => {
+                setAuthToken(null);
+                localStorage.removeItem('auth_user');
+                setCurrentUser(null);
+              }}
+              title="تسجيل الخروج"
+              className="w-9 h-9 rounded-xl hover:bg-red-500/20 flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors"
+            >
+              <LogOut size={16} />
+            </button>
             <div
-              title="المدير — مدير المتجر"
+              title={`${currentUser?.display_name || currentUser?.username || ''} — ${userRole}`}
               className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-md cursor-default"
             >
-              م
+              {(currentUser?.display_name || currentUser?.username || 'م')[0]}
             </div>
           </div>
         ) : (
           <div className="flex items-center gap-3 px-1">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-md">
-              م
+              {(currentUser?.display_name || currentUser?.username || 'م')[0]}
             </div>
-            <div className="min-w-0">
-              <div className="text-white text-sm font-semibold truncate">المدير</div>
-              <div className="text-slate-400 text-xs truncate">مدير المتجر</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-white text-sm font-semibold truncate">{currentUser?.display_name || currentUser?.username || 'المدير'}</div>
+              <div className="text-slate-400 text-xs truncate">{userRole}</div>
             </div>
+            <button
+              onClick={() => {
+                setAuthToken(null);
+                localStorage.removeItem('auth_user');
+                setCurrentUser(null);
+              }}
+              title="تسجيل الخروج"
+              className="w-7 h-7 rounded-lg hover:bg-red-500/20 flex items-center justify-center text-slate-500 hover:text-red-400 transition-colors shrink-0"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
         )}
       </div>

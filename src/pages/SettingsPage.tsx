@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Store, FileText, Bot, Save, Loader2, Percent, CheckCircle, XCircle, BadgeInfo, Sun, Moon, Monitor, Database, Trash2, Shield } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Store, FileText, Bot, Save, Loader2, Percent, CheckCircle, XCircle, BadgeInfo, Sun, Moon, Monitor, Database, Trash2, Shield, Users, Plus, UserCircle, AlertTriangle } from 'lucide-react';
 import { usePOSStore } from '../store/posStore';
 import { useThemeStore } from '../store/themeStore';
 import { api } from '../lib/api';
+import Modal from '../components/Modal';
 
 export default function SettingsPage() {
   const { settings, saveSettings, addToast, fetchProducts, fetchCustomers, clearCart } = usePOSStore();
@@ -11,10 +12,75 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [testingAI, setTestingAI] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [newUser, setNewUser] = useState({ username: '', password: '', role: 'كاشير', display_name: '' });
+  const [backups, setBackups] = useState<any[]>([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const backupFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setForm({ ...settings });
   }, [settings]);
+
+  const loadUsers = async () => {
+    try {
+      const data = await api.listUsers();
+      setUsers(data);
+    } catch (err: any) {
+      addToast('error', `فشل في تحميل المستخدمين: ${err.message || 'خطأ في الاتصال'}`);
+    }
+  };
+
+  const loadBackups = async () => {
+    try {
+      const data = await api.backupList();
+      setBackups(data);
+    } catch (err: any) {
+      addToast('error', `فشل في تحميل النسخ الاحتياطية: ${err.message || 'خطأ في الاتصال'}`);
+    }
+  };
+
+  useEffect(() => { loadUsers(); loadBackups(); }, []);
+
+  const handleAddUser = async () => {
+    try {
+      await api.createUser(newUser);
+      addToast('success', 'تم إضافة المستخدم');
+      setNewUser({ username: '', password: '', role: 'كاشير', display_name: '' });
+      setShowUserModal(false);
+      loadUsers();
+    } catch (err: any) {
+      addToast('error', err.message || 'فشل في إضافة المستخدم');
+    }
+  };
+
+  const handleDeleteUser = async (id: number) => {
+    try {
+      await api.deleteUser(id);
+      addToast('success', 'تم حذف المستخدم');
+      loadUsers();
+    } catch (err: any) {
+      addToast('error', err.message || 'فشل في حذف المستخدم');
+    }
+  };
+
+  const handleBackupNow = async () => {
+    setBackupLoading(true);
+    try {
+      await api.backupNow();
+      addToast('success', 'تم النسخ الاحتياطي بنجاح');
+      loadBackups();
+    } catch (err: any) { addToast('error', `فشل في النسخ الاحتياطي: ${err.message || 'خطأ في الاتصال'}`); }
+    setBackupLoading(false);
+  };
+
+  const handleRestoreBackup = async (file: File) => {
+    try {
+      await api.backupRestore(file);
+      addToast('success', 'تمت الاستعادة بنجاح — أعد تحميل الصفحة');
+    } catch (err: any) { addToast('error', `فشل في الاستعادة: ${err.message || 'خطأ في الاتصال'}`); }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,8 +109,8 @@ export default function SettingsPage() {
       fetchProducts();
       fetchCustomers();
       clearCart();
-    } catch {
-      addToast('error', 'فشل في تنظيف قاعدة البيانات');
+    } catch (err: any) {
+      addToast('error', `فشل في تنظيف قاعدة البيانات: ${err.message || 'خطأ في الاتصال'}`);
     }
   };
 
@@ -327,6 +393,103 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-card-border dark:border-slate-700/50 p-7 shadow-sm transition-all hover:shadow-md relative overflow-hidden">
+          <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="flex items-center gap-2.5 mb-5">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+              <Users size={18} className="text-blue-500" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-text-primary dark:text-white">إدارة المستخدمين</h2>
+              <p className="text-xs text-text-muted dark:text-slate-400">إضافة وحذف الكاشيرين</p>
+            </div>
+          </div>
+          <div className="space-y-2 mb-4">
+            {users.map((u: any) => (
+              <div key={u.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 rounded-xl px-4 py-3 border border-card-border dark:border-slate-600">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-primary">
+                    <UserCircle size={18} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-text-primary dark:text-white">{u.display_name || u.username}</div>
+                    <div className="text-xs text-text-muted dark:text-slate-400">@{u.username} · {u.role}</div>
+                  </div>
+                </div>
+                {u.role !== 'مدير' && (
+                  <button
+                    onClick={() => { if (confirm(`حذف المستخدم "${u.username}"؟`)) handleDeleteUser(u.id); }}
+                    className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                  >
+                    <Trash2 size={14} />
+                    حذف
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowUserModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            إضافة كاشير
+          </button>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-card-border dark:border-slate-700/50 p-7 shadow-sm transition-all hover:shadow-md relative overflow-hidden">
+          <div className="absolute -top-10 -left-10 w-40 h-40 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="flex items-center gap-2.5 mb-5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+              <Database size={18} className="text-emerald-500" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-text-primary dark:text-white">النسخ الاحتياطي</h2>
+              <p className="text-xs text-text-muted dark:text-slate-400">نسخ واستعادة البيانات</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              type="button"
+              onClick={handleBackupNow}
+              disabled={backupLoading}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {backupLoading ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
+              نسخ احتياطي الآن
+            </button>
+            <button
+              type="button"
+              onClick={() => backupFileRef.current?.click()}
+              className="flex items-center gap-2 px-5 py-2.5 border border-card-border dark:border-slate-600 rounded-xl text-sm font-medium text-text-muted dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              استعادة من نسخة
+            </button>
+            <input
+              ref={backupFileRef}
+              type="file"
+              accept=".db"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) handleRestoreBackup(e.target.files[0]);
+                e.target.value = '';
+              }}
+            />
+          </div>
+          {backups.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-text-muted dark:text-slate-400">النسخ المتوفرة ({backups.length}/7):</p>
+              {backups.slice(0, 5).map((b: any, i: number) => (
+                <div key={i} className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 border border-card-border dark:border-slate-600">
+                  <span className="text-text-muted dark:text-slate-400">{new Date(b.created_at).toLocaleString('ar-EG')}</span>
+                  <span className="text-text-muted dark:text-slate-500">{(b.size / 1024).toFixed(0)} KB</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="bg-white dark:bg-slate-800 rounded-3xl border border-red-200 dark:border-red-500/20 p-7 shadow-sm transition-all hover:shadow-md relative overflow-hidden">
           <div className="absolute -top-10 -left-10 w-40 h-40 bg-red-500/5 dark:bg-red-500/10 rounded-full blur-3xl pointer-events-none"></div>
           <div className="flex items-center gap-2.5 mb-4">
@@ -357,6 +520,46 @@ export default function SettingsPage() {
           حفظ الإعدادات بالكامل
         </button>
       </form>
+
+      <Modal isOpen={showUserModal} onClose={() => setShowUserModal(false)} title="إضافة كاشير جديد">
+        <form onSubmit={(e) => { e.preventDefault(); handleAddUser(); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">اسم المستخدم *</label>
+            <input
+              type="text"
+              required
+              value={newUser.username}
+              onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+              className="w-full border border-card-border dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-text-primary dark:text-white focus:outline-none focus:border-primary"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">كلمة المرور *</label>
+            <input
+              type="password"
+              required
+              value={newUser.password}
+              onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+              className="w-full border border-card-border dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-text-primary dark:text-white focus:outline-none focus:border-primary"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary dark:text-slate-300 mb-1">الاسم المعروض</label>
+            <input
+              type="text"
+              value={newUser.display_name}
+              onChange={(e) => setNewUser({ ...newUser, display_name: e.target.value })}
+              className="w-full border border-card-border dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-text-primary dark:text-white focus:outline-none focus:border-primary"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" className="flex-1 py-2.5 rounded-xl bg-primary text-white font-medium hover:bg-blue-700">إضافة</button>
+            <button type="button" onClick={() => setShowUserModal(false)} className="flex-1 py-2.5 rounded-xl border border-card-border dark:border-slate-600 text-text-muted dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700">إلغاء</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
