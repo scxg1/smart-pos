@@ -118,43 +118,40 @@ ${settings.receipt_footer ? `<div class="footer">${settings.receipt_footer}</div
       pdf.addImage(imgData, 'PNG', 0, 0, w, h);
       pdf.save(`فاتورة_${receiptNumber}.pdf`);
     } catch {
-      // fallback to print
       handleThermalPrint();
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={() => setShowReceipt(false)} />
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
-          <h2 className="font-bold text-lg text-gray-800">فاتورة #{receiptNumber}</h2>
-          <button onClick={() => setShowReceipt(false)} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center">
-            <X size={18} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowReceipt(false)} />
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto animate-scale-in">
+        <div className="flex items-center justify-between p-4 border-b border-slate-100">
+          <h2 className="font-bold text-base text-slate-800">فاتورة #{receiptNumber}</h2>
+          <button onClick={() => setShowReceipt(false)} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-colors">
+            <X size={16} />
           </button>
         </div>
 
-        {/* Receipt Preview */}
         <div ref={receiptRef} className="p-5 text-sm" style={{ fontFamily: 'Segoe UI, Tahoma, Arial, sans-serif', direction: 'rtl' }}>
-          {/* Store Header */}
           <div className="text-center mb-3">
-            <p className="text-lg font-bold text-gray-900">{settings.store_name || 'نقطة البيع الذكية'}</p>
-            {settings.store_address && <p className="text-xs text-gray-500 mt-0.5">{settings.store_address}</p>}
-            {settings.store_phone && <p className="text-xs text-gray-500">هاتف: {settings.store_phone}</p>}
-            {settings.store_tax_number && <p className="text-xs text-gray-500">الرقم الضريبي: {settings.store_tax_number}</p>}
-            {settings.receipt_header && <p className="text-xs text-gray-400 mt-1.5 italic">{settings.receipt_header}</p>}
+            <p className="text-base font-bold text-slate-900">{settings.store_name || 'نقطة البيع الذكية'}</p>
+            {settings.store_address && <p className="text-[11px] text-slate-400 mt-0.5">{settings.store_address}</p>}
+            {settings.store_phone && <p className="text-[11px] text-slate-400">هاتف: {settings.store_phone}</p>}
+            {settings.store_tax_number && <p className="text-[11px] text-slate-400">الرقم الضريبي: {settings.store_tax_number}</p>}
+            {settings.receipt_header && <p className="text-[11px] text-slate-300 mt-1.5 italic">{settings.receipt_header}</p>}
           </div>
 
-          <div className="border-t border-dashed border-gray-300 pt-3 mb-3 space-y-1 text-xs text-gray-600">
-            <div className="flex justify-between"><span>رقم الفاتورة:</span><span className="font-bold text-gray-900">#{receiptNumber}</span></div>
+          <div className="border-t border-dashed border-slate-200 pt-3 mb-3 space-y-1 text-[11px] text-slate-500">
+            <div className="flex justify-between"><span>رقم الفاتورة:</span><span className="font-bold text-slate-800">#{receiptNumber}</span></div>
             <div className="flex justify-between"><span>التاريخ:</span><span>{date.toLocaleDateString('ar-EG')}</span></div>
             <div className="flex justify-between"><span>الوقت:</span><span>{date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span></div>
             <div className="flex justify-between"><span>طريقة الدفع:</span><span className="font-semibold">{lastSale.payment_method}</span></div>
           </div>
 
-          <table className="w-full text-xs border-t border-dashed border-gray-300 pt-2" style={{ borderTop: '1px dashed #ccc', marginTop: '4px' }}>
+          <table className="w-full text-[11px] border-t border-dashed border-slate-200" style={{ borderTop: '1px dashed #e2e8f0', marginTop: '4px' }}>
             <thead>
-              <tr className="text-gray-500 border-b border-dashed border-gray-300">
+              <tr className="text-slate-400 border-b border-dashed border-slate-200">
                 <th className="text-right py-1.5 font-semibold" style={{ width: '30%' }}>الصنف</th>
                 <th className="text-right py-1.5 font-semibold" style={{ width: '18%' }}>الفئة</th>
                 <th className="text-center py-1.5 font-semibold" style={{ width: '10%' }}>ك</th>
@@ -164,57 +161,54 @@ ${settings.receipt_footer ? `<div class="footer">${settings.receipt_footer}</div
             </thead>
             <tbody>
               {items.length > 0 ? items.map((item: any, idx: number) => (
-                <tr key={idx} className="border-b border-gray-50">
-                  <td className="py-1.5 text-gray-800 font-medium">
-                    {item.name}
-                  </td>
-                  <td className="py-1.5 text-gray-500 text-[10px] pr-1">{item.category || '-'}</td>
-                  <td className="py-1.5 text-center text-gray-600">{item.quantity}</td>
-                  <td className="py-1.5 text-center text-gray-600 tabular-nums">{Number(item.unit_price || 0).toFixed(2)}</td>
-                  <td className="py-1.5 text-left font-medium tabular-nums text-gray-800">{Number(item.subtotal || 0).toFixed(2)}</td>
+                <tr key={idx} className="border-b border-slate-50">
+                  <td className="py-1.5 text-slate-800 font-medium">{item.name}</td>
+                  <td className="py-1.5 text-slate-400 text-[10px]">{item.category || '-'}</td>
+                  <td className="py-1.5 text-center text-slate-500">{item.quantity}</td>
+                  <td className="py-1.5 text-center text-slate-500 tabular-nums">{Number(item.unit_price || 0).toFixed(2)}</td>
+                  <td className="py-1.5 text-left font-medium tabular-nums text-slate-800">{Number(item.subtotal || 0).toFixed(2)}</td>
                 </tr>
               )) : (
-                <tr><td colSpan={5} className="text-center py-3 text-gray-400">لا توجد منتجات</td></tr>
+                <tr><td colSpan={5} className="text-center py-3 text-slate-300">لا توجد منتجات</td></tr>
               )}
             </tbody>
           </table>
 
-          <div className="border-t border-dashed border-gray-300 mt-2 pt-2 space-y-1 text-xs">
-            <div className="flex justify-between text-gray-600"><span>المجموع الفرعي:</span><span className="tabular-nums">{subtotal.toFixed(2)} ج.م</span></div>
+          <div className="border-t border-dashed border-slate-200 mt-2 pt-2 space-y-1 text-[11px]">
+            <div className="flex justify-between text-slate-500"><span>المجموع الفرعي:</span><span className="tabular-nums">{subtotal.toFixed(2)} ج.م</span></div>
             {lastSale.discount > 0 && (
               <div className="flex justify-between text-red-500"><span>خصم ({lastSale.discount}%):</span><span className="tabular-nums">- {(subtotal * lastSale.discount / 100).toFixed(2)} ج.م</span></div>
             )}
             {lastSale.tax > 0 && (
-              <div className="flex justify-between text-gray-600"><span>ضريبة ({taxRate}%):</span><span className="tabular-nums">{Number(lastSale.tax).toFixed(2)} ج.م</span></div>
+              <div className="flex justify-between text-slate-500"><span>ضريبة ({taxRate}%):</span><span className="tabular-nums">{Number(lastSale.tax).toFixed(2)} ج.م</span></div>
             )}
-            <div className="flex justify-between font-bold text-base pt-1.5 border-t border-gray-200 text-gray-900">
+            <div className="flex justify-between font-bold text-sm pt-1.5 border-t border-slate-100 text-slate-900">
               <span>الإجمالي:</span>
-              <span className="text-blue-600 tabular-nums">{Number(lastSale.total).toFixed(2)} ج.م</span>
+              <span className="text-indigo-600 tabular-nums">{Number(lastSale.total).toFixed(2)} ج.م</span>
             </div>
           </div>
 
           {settings.receipt_footer && (
-            <p className="text-center text-xs text-gray-400 mt-3 pt-2.5 border-t border-dashed border-gray-300">
+            <p className="text-center text-[11px] text-slate-300 mt-3 pt-2.5 border-t border-dashed border-slate-200">
               {settings.receipt_footer}
             </p>
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 p-4 border-t border-gray-100">
+        <div className="flex gap-2 p-4 border-t border-slate-100">
           <button
             onClick={handleDownloadPDF}
-            className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-medium text-sm flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
+            className="flex-1 py-2 rounded-xl bg-indigo-500 text-white font-medium text-sm flex items-center justify-center gap-2 hover:bg-indigo-600 shadow-sm transition-colors"
           >
-            <Download size={16} />
+            <Download size={15} />
             تحميل PDF
           </button>
           <button
             id="thermal-print-btn"
             onClick={handleThermalPrint}
-            className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-medium text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
+            className="flex-1 py-2 rounded-xl bg-emerald-500 text-white font-medium text-sm flex items-center justify-center gap-2 hover:bg-emerald-600 shadow-sm transition-colors"
           >
-            <Printer size={16} />
+            <Printer size={15} />
             طباعة حرارية
           </button>
         </div>

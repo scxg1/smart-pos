@@ -13,4 +13,22 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  build: {
+    target: 'es2020',
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('recharts')) return 'charts';
+            if (id.includes('jspdf') || id.includes('html2canvas')) return 'pdf';
+            if (id.includes('react') || id.includes('zustand')) return 'vendor';
+          }
+        },
+      },
+    },
+    sourcemap: false,
+    reportCompressedSize: true,
+    chunkSizeWarningLimit: 1000,
+  },
 });

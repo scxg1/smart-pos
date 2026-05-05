@@ -25,6 +25,7 @@ export interface Customer {
 }
 
 export interface CartItem {
+  uid: number;
   product_id: number;
   name: string;
   quantity: number;
@@ -78,8 +79,8 @@ interface POSState {
   paymentMethod: string;
   taxEnabled: boolean;
   addToCart: (product: Product) => void;
-  removeFromCart: (productId: number) => void;
-  updateCartQuantity: (productId: number, quantity: number) => void;
+  removeFromCart: (uid: number) => void;
+  updateCartQuantity: (uid: number, quantity: number) => void;
   clearCart: () => void;
   setCartCustomer: (customer: Customer | null) => void;
   setCartDiscount: (discount: number) => void;
@@ -136,6 +137,7 @@ interface POSState {
 }
 
 let toastId = 0;
+let cartUid = 0;
 
 export const usePOSStore = create<POSState>((set, get) => ({
   activePage: 'cashier',
@@ -167,55 +169,45 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
   addToCart: (product) => {
     const { cart } = get();
-    const existing = cart.find(item => item.product_id === product.id);
     const needsPrice = product.selling_price === null || product.selling_price === undefined;
-
-    if (existing) {
-      if (!needsPrice && existing.quantity >= product.stock) {
-        get().addToast('warning', 'المخزون غير كافٍ');
-        return;
-      }
-      set({
-        cart: cart.map(item =>
-          item.product_id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        ),
-      });
-    } else {
-      if (!needsPrice && product.stock <= 0) {
-        get().addToast('warning', 'المنتج غير متوفر في المخزون');
-        return;
-      }
-      set({
-        cart: [...cart, {
-          product_id: product.id,
-          name: product.name,
-          quantity: 1,
-          unit_price: needsPrice ? 0 : (product.selling_price || 0),
-          cost_price: product.cost_price || 0,
-          unit: product.unit,
-          image_path: product.image_path,
-          category: product.category,
-          needs_price: needsPrice,
-          profit_margin: product.profit_margin || 0,
-        }],
-      });
+    if (!needsPrice && product.stock <= 0) {
+      get().addToast('warning', 'المنتج غير متوفر في المخزون');
+      return;
     }
+    const sameProductCount = cart.filter(item => item.product_id === product.id).reduce((s, i) => s + i.quantity, 0);
+    if (!needsPrice && sameProductCount >= product.stock) {
+      get().addToast('warning', 'المخزون غير كافٍ');
+      return;
+    }
+    set({
+      cart: [...cart, {
+        uid: ++cartUid,
+        product_id: product.id,
+        name: product.name,
+        quantity: 1,
+        unit_price: needsPrice ? 0 : (product.selling_price || 0),
+        cost_price: product.cost_price || 0,
+        unit: product.unit,
+        image_path: product.image_path,
+        category: product.category,
+        needs_price: needsPrice,
+        profit_margin: product.profit_margin || 0,
+      }],
+    });
   },
 
-  removeFromCart: (productId) => {
-    set({ cart: get().cart.filter(item => item.product_id !== productId) });
+  removeFromCart: (uid) => {
+    set({ cart: get().cart.filter(item => item.uid !== uid) });
   },
 
-  updateCartQuantity: (productId, quantity) => {
+  updateCartQuantity: (uid, quantity) => {
     if (quantity <= 0) {
-      get().removeFromCart(productId);
+      get().removeFromCart(uid);
       return;
     }
     set({
       cart: get().cart.map(item =>
-        item.product_id === productId ? { ...item, quantity } : item
+        item.uid === uid ? { ...item, quantity } : item
       ),
     });
   },

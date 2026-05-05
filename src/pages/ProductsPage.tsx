@@ -50,18 +50,17 @@ export default function ProductsPage() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="grid grid-cols-4 gap-4">
+    <div className="p-5 space-y-5">
+      <div className="grid grid-cols-4 gap-3">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white dark:bg-slate-800 rounded-3xl border border-card-border dark:border-slate-700/50 p-6 shadow-sm flex items-center gap-5 transition-all hover:shadow-md relative overflow-hidden group">
-            <div className="absolute -top-10 -left-10 w-32 h-32 bg-slate-50 dark:bg-slate-700/30 rounded-full blur-2xl pointer-events-none group-hover:bg-primary/5 transition-colors"></div>
-            <div className={`w-14 h-14 rounded-2xl ${stat.iconBg} flex items-center justify-center shadow-lg shrink-0 relative z-10`}>
-              <stat.icon size={24} className="text-white" />
+          <div key={i} className="stat-card flex items-center gap-4 p-5">
+            <div className={`w-12 h-12 rounded-xl ${stat.iconBg} flex items-center justify-center shadow-lg shrink-0 relative z-10`}>
+              <stat.icon size={22} className="text-white" />
             </div>
             <div className="min-w-0 relative z-10">
-              <p className="text-xs text-text-muted dark:text-slate-400 font-bold uppercase tracking-wider">{stat.label}</p>
-              <p className="text-2xl font-black text-text-primary dark:text-white mt-1 truncate">{stat.value}</p>
-              <p className="text-[11px] text-text-muted dark:text-slate-500 mt-0.5 font-medium">{stat.sub}</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{stat.label}</p>
+              <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 truncate">{stat.value}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{stat.sub}</p>
             </div>
           </div>
         ))}

@@ -12,7 +12,7 @@ import SalesPage from './pages/SalesPage';
 import LoginPage from './pages/LoginPage';
 import { usePOSStore } from './store/posStore';
 import { useThemeStore } from './store/themeStore';
-import { Bell, Sun, Moon } from 'lucide-react';
+import { Bell, Sun, Moon, Loader2 } from 'lucide-react';
 import { setAuthToken, getAuthToken } from './lib/api';
 
 const pages: Record<string, React.FC> = {
@@ -47,25 +47,25 @@ function TopBar() {
   });
 
   return (
-    <header className="h-[58px] bg-white dark:bg-slate-800 border-b border-card-border dark:border-slate-700 flex items-center justify-between px-6 shrink-0 shadow-sm">
+    <header className="h-[56px] bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between px-6 shrink-0">
       <div className="flex flex-col justify-center leading-none">
-        <h1 className="text-[15px] font-bold text-text-primary dark:text-white">{meta.title}</h1>
-        <p className="text-xs text-text-muted dark:text-slate-400 mt-[3px]">{meta.sub}</p>
+        <h1 className="text-[15px] font-bold text-slate-800 dark:text-white">{meta.title}</h1>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-[2px]">{meta.sub}</p>
       </div>
-      <div className="flex items-center gap-3">
-        <span className="hidden sm:block text-xs text-text-muted dark:text-slate-400 bg-gray-50 dark:bg-slate-700 border border-card-border dark:border-slate-600 px-3 py-1.5 rounded-lg">
+      <div className="flex items-center gap-2">
+        <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600/50 px-3 py-1.5 rounded-lg">
           {dateStr}
         </span>
         <button
           onClick={toggleTheme}
-          className="w-9 h-9 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 border border-card-border dark:border-slate-600 flex items-center justify-center text-text-muted dark:text-slate-400 transition-colors"
+          className="w-8 h-8 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-slate-100 dark:border-slate-600/50 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-all duration-200"
         >
-          {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+          {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
         </button>
-        <button className="relative w-9 h-9 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 border border-card-border dark:border-slate-600 flex items-center justify-center text-text-muted dark:text-slate-400 transition-colors">
-          <Bell size={16} />
+        <button className="relative w-8 h-8 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-slate-100 dark:border-slate-600/50 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-all duration-200">
+          <Bell size={15} />
           {lowStockCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-danger text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none shadow-sm">
               {lowStockCount}
             </span>
           )}
@@ -86,19 +86,28 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    setCurrentUser(null);
+    localStorage.removeItem('auth_user');
     const token = getAuthToken();
-    if (token) {
-      const savedUser = localStorage.getItem('auth_user');
-      if (savedUser) {
-        try {
-          setCurrentUser(JSON.parse(savedUser));
-        } catch {
-          setAuthToken(null);
-          localStorage.removeItem('auth_user');
-        }
-      }
+    if (!token) {
+      setAuthChecked(true);
+      return;
     }
-    setAuthChecked(true);
+    fetch('http://localhost:3001/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => {
+        if (res.ok) return res.json();
+        throw new Error('invalid');
+      })
+      .then(data => {
+        setCurrentUser(data.user);
+      })
+      .catch(() => {
+        setAuthToken(null);
+        setCurrentUser(null);
+      })
+      .finally(() => setAuthChecked(true));
   }, []);
 
   useEffect(() => {
@@ -111,7 +120,13 @@ export default function App() {
     }
   }, [currentUser, activePage]);
 
-  if (!authChecked) return null;
+  if (!authChecked) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-900">
+        <Loader2 size={32} className="animate-spin text-indigo-500" />
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return (
@@ -129,7 +144,7 @@ export default function App() {
   const PageComponent = pages[activePage] || CashierPage;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-app-bg dark:bg-slate-900" dir="rtl">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900" dir="rtl">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <TopBar />

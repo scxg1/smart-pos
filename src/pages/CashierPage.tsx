@@ -33,8 +33,9 @@ export default function CashierPage() {
 
   const loadDailyStats = async () => {
     try {
-      const summary = await api.getReportsSummary(new Date().toISOString().split('T')[0], new Date().toISOString().split('T')[0]);
-      const topProducts = await api.getReportsTopProducts(new Date().toISOString().split('T')[0], new Date().toISOString().split('T')[0]);
+      const today = new Date().toISOString().split('T')[0];
+      const summary = await api.getReportsSummary(today, today);
+      const topProducts = await api.getReportsTopProducts(today, today);
       setDailyStats({
         total: summary.total_sales || 0,
         count: summary.invoice_count || 0,
@@ -92,27 +93,27 @@ export default function CashierPage() {
       <CartPanel />
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="bg-white dark:bg-slate-800">
-          <div className={`flex items-center gap-3 px-4 overflow-hidden transition-all duration-300 ease-in-out ${headerExpanded ? 'max-h-16 py-2.5 opacity-100' : 'max-h-0 py-0 opacity-0'}`}>
+        <div className="bg-white dark:bg-slate-800/50">
+          <div className={`flex items-center gap-3 px-4 overflow-hidden transition-all duration-300 ease-in-out ${headerExpanded ? 'max-h-14 py-2 opacity-100' : 'max-h-0 py-0 opacity-0'}`}>
             <div className="relative flex-1 max-w-md">
-              <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted dark:text-slate-400" />
+              <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" />
               <input
                 id="cashier-search"
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="ابحث عن منتج... (F2)"
-                className="w-full pr-11 pl-4 py-2.5 border border-card-border dark:border-slate-600/50 rounded-xl text-sm bg-slate-50/50 dark:bg-slate-900/50 text-text-primary dark:text-white focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all shadow-sm"
+                className="input-field pr-10 py-2"
               />
             </div>
-            <div className="relative w-40">
-              <ScanBarcode size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="relative w-36">
+              <ScanBarcode size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" />
               <input
                 ref={barcodeInputRef}
                 type="text"
                 onKeyDown={handleBarcodeScan}
                 placeholder="مسح باركود..."
-                className="w-full pr-9 pl-3 py-2.5 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-sm bg-slate-50/50 dark:bg-slate-900/50 text-text-primary dark:text-white focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all shadow-sm font-mono"
+                className="input-field pr-8 py-2 border-dashed font-mono text-[12px]"
                 dir="ltr"
               />
             </div>
@@ -123,10 +124,10 @@ export default function CashierPage() {
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200
+                className={`px-4 py-2 rounded-lg text-[13px] font-bold whitespace-nowrap transition-all duration-200
                   ${selectedCategory === cat
-                    ? 'bg-gradient-to-l from-primary to-indigo-600 text-white shadow-sm shadow-primary/20'
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                    ? 'bg-gradient-to-l from-indigo-600 to-indigo-500 text-white shadow-sm shadow-indigo-500/20'
+                    : 'bg-slate-50 dark:bg-slate-700/50 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'}`}
               >
                 {cat}
               </button>
@@ -134,10 +135,10 @@ export default function CashierPage() {
             <div className="mr-auto" />
             <button
               onClick={() => setHeaderExpanded(!headerExpanded)}
-              className={`w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shrink-0 ${headerExpanded ? 'rotate-180' : ''}`}
+              className={`w-6 h-6 rounded-md flex items-center justify-center text-slate-300 hover:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all shrink-0 ${headerExpanded ? 'rotate-180' : ''}`}
               title={headerExpanded ? 'إخفاء البحث' : 'إظهار البحث'}
             >
-              <ChevronDown size={16} />
+              <ChevronDown size={14} />
             </button>
           </div>
 
@@ -146,16 +147,16 @@ export default function CashierPage() {
         <div className="flex-1 overflow-y-auto p-3">
           {productsLoading ? (
             <div className="flex items-center justify-center h-64">
-              <Loader2 size={40} className="animate-spin text-primary" />
+              <Loader2 size={36} className="animate-spin text-indigo-500" />
             </div>
           ) : filteredProducts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-text-muted dark:text-slate-400">
-              <Search size={48} className="text-gray-300 dark:text-slate-600 mb-4" />
-              <p className="text-lg">لا توجد منتجات</p>
-              <p className="text-sm mt-1">جرّب تغيير البحث أو الفئة</p>
+            <div className="flex flex-col items-center justify-center h-64 text-slate-300 dark:text-slate-600">
+              <Search size={40} className="mb-3" />
+              <p className="text-base font-medium">لا توجد منتجات</p>
+              <p className="text-[12px] mt-1 text-slate-400">جرّب تغيير البحث أو الفئة</p>
             </div>
           ) : (
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+            <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
               {filteredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
@@ -168,51 +169,51 @@ export default function CashierPage() {
 
       <button
         onClick={() => setShowAI(!showAI)}
-        className="fixed bottom-6 left-6 z-40 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-5 py-3.5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgba(99,102,241,0.4)] transition-all flex items-center gap-2.5 hover:-translate-y-1 group"
+        className="fixed bottom-6 left-6 z-40 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4.5 py-3 rounded-2xl shadow-xl shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all duration-200 flex items-center gap-2 hover:-translate-y-0.5 group"
       >
-        <Bot size={22} className="group-hover:animate-bounce" />
-        <span className="text-sm font-bold tracking-wide">المدير الذكي</span>
+        <Bot size={20} className="group-hover:animate-bounce" />
+        <span className="text-[13px] font-bold">المدير الذكي</span>
       </button>
 
       {showAI && (
-        <div className="fixed bottom-24 left-6 z-40 w-[340px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/50 overflow-hidden animate-fade-in-up">
-          <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-purple-500/10 to-indigo-500/10">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-md shadow-purple-500/20">
-                <Sparkles size={16} className="text-white" />
+        <div className="fixed bottom-24 left-6 z-40 w-[320px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700/50 overflow-hidden animate-fade-in-up">
+          <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-purple-500/5 to-indigo-500/5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-md shadow-purple-500/20">
+                <Sparkles size={14} className="text-white" />
               </div>
-              <h3 className="font-bold text-slate-800 dark:text-white tracking-wide">المدير الذكي</h3>
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm">المدير الذكي</h3>
             </div>
-            <button onClick={() => setShowAI(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
-              <X size={16} />
+            <button onClick={() => setShowAI(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
+              <X size={14} />
             </button>
           </div>
 
-          <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
+          <div className="p-3.5 space-y-2.5 max-h-72 overflow-y-auto">
             <button
               onClick={handleAIInsights}
               disabled={aiLoading}
-              className="w-full py-2.5 rounded-xl bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:bg-gray-300 dark:disabled:bg-slate-600 flex items-center justify-center gap-2"
+              className="w-full py-2 rounded-xl bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 flex items-center justify-center gap-2 transition-colors"
             >
-              {aiLoading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
               رؤى المبيعات اليوم
             </button>
 
             {aiInsights.length > 0 && (
-              <div className="bg-purple-50 dark:bg-purple-500/10 rounded-xl p-3 space-y-2">
+              <div className="bg-purple-50 dark:bg-purple-500/10 rounded-xl p-3 space-y-1.5">
                 {aiInsights.map((insight, i) => (
-                  <div key={i} className="flex gap-2 text-sm">
-                    <span className="text-purple-600 dark:text-purple-400 mt-0.5">•</span>
-                    <span className="text-gray-700 dark:text-slate-300">{insight}</span>
+                  <div key={i} className="flex gap-2 text-[12px]">
+                    <span className="text-purple-500 mt-0.5">•</span>
+                    <span className="text-slate-600 dark:text-slate-300">{insight}</span>
                   </div>
                 ))}
               </div>
             )}
 
             {aiSuggestion && (
-              <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-xl p-3">
-                <div className="text-xs text-green-600 dark:text-green-400 font-medium mb-1">اقتراح للبيع الإضافي:</div>
-                <div className="text-sm text-green-800 dark:text-green-300">{aiSuggestion}</div>
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/15 rounded-xl p-3">
+                <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mb-0.5">اقتراح للبيع الإضافي:</div>
+                <div className="text-[12px] text-emerald-800 dark:text-emerald-300">{aiSuggestion}</div>
               </div>
             )}
           </div>

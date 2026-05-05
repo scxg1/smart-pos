@@ -1,7 +1,7 @@
 {
   "name": "smart-pos",
-  "version": "1.0.0",
-  "description": "نقطة البيع الذكية - Smart POS System",
+  "version": "2.0.0",
+  "description": "Smart POS System - نقطة البيع الذكية",
   "author": {
     "name": "Smart POS",
     "email": "support@smartpos.app"
@@ -15,14 +15,16 @@
     "start": "concurrently -k \"npm run server\" \"vite\"",
     "electron": "electron .",
     "build:exe": "npm run server:build && vite build && electron-builder --win nsis",
-    "build:portable": "npm run server:build && vite build && electron-builder --win portable"
+    "build:portable": "npm run server:build && vite build && electron-builder --win portable",
+    "lint": "tsc --noEmit"
   },
   "build": {
     "appId": "com.smartpos.app",
     "productName": "Smart POS",
     "copyright": "Copyright © 2025 Smart POS",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "assets"
     },
     "files": [
       "dist/**/*",
@@ -41,11 +43,14 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "icon": null,
-      "requestedExecutionLevel": "requireAdministrator"
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "artifactName": "Smart-POS-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -55,10 +60,17 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Smart POS",
       "runAfterFinish": true,
-      "installerIcon": null,
-      "uninstallerIcon": null,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
       "artifactName": "Smart-POS-Setup-${version}.exe",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "ar",
+        "en"
+      ],
+      "language": "1025",
+      "include": null,
+      "license": null
     },
     "portable": {
       "artifactName": "Smart-POS-Portable.exe"
@@ -104,6 +116,7 @@
     "electron": "^28.2.0",
     "electron-builder": "^24.9.1",
     "postcss": "^8.4.35",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
